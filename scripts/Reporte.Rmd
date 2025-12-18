@@ -1,0 +1,241 @@
+---
+title: "Informe: Análisis del Consumo de Alcohol en Centroamérica"
+subtitle: "Estudio basado en indicadores de la Organización Mundial de la Salud (OMS)"
+author: "Yader Alexander Ramirez"
+date: "`r Sys.Date()`"
+output: 
+html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    df_print: paged
+---
+<style>
+body {
+  font-family: Arial, sans-serif;
+  font-size: 12pt;
+  text-align: justify;
+  line-height: 1.5;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,    
+  message = FALSE, 
+  warning = FALSE  
+)
+```
+Introducción
+El consumo de alcohol es un factor de riesgo crítico para la salud pública global. En Centroamérica, este fenómeno presenta matices únicos debido a la diversidad de contextos culturales y regulatorios de la región. Este informe analiza el panorama del consumo en siete países utilizando datos de la Organización Mundial de la Salud (OMS) procesados en R.
+```{r}
+library(tidyverse) 
+library(readxl)
+library(janitor)
+library(knitr)
+```
+
+```{r}
+library(readxl)
+alcohol <- read_excel("alcohol.xlsx", col_types = c("text", 
+                                                    "numeric", "skip", "skip", "text", "text", 
+                                                    "text", "numeric", "skip", "skip", "skip", 
+                                                    "skip", "skip", "numeric", "text", "numeric", 
+                                                    "numeric", "numeric", "numeric", "skip", 
+                                                    "skip", "text", "skip", "skip"))
+```
+
+Estos datos se filtrarán unicamente para los paises centroamericanos, para ello se usa la abreviación.
+```{r}
+tabla_iso <- data.frame(
+  Pais = c("Belice", "Guatemala", "El Salvador", "Honduras", "Nicaragua", "Costa Rica", "Panama"),
+  Abreviacion = c("BLZ", "GTM", "SLV", "HND", "NIC", "CRI", "PAN")
+)
+
+kable(tabla_iso, caption = "Abreviaciones ISO3 utilizadas para el filtrado regional")
+```
+
+
+```{r}
+paises<-c("BLZ","GTM","SLV","HND","NIC","CRI","PAN")
+centro_america<-alcohol%>%filter(iso3==paises)
+```
+Descripción de los Indicadores
+Se seleccionaron tres indicadores fundamentales:
+
+Consumo Total per cápita (APC): Cantidad total de alcohol puro consumido por persona (15+ años).
+
+Consumo Episódico Fuerte (HED): Proporción de adultos con consumo de 60g+ de alcohol en una ocasión (atracón).
+
+Abstinencia (12 meses): Porcentaje de la población que no ha consumido alcohol en el último año.
+```{r}
+centro_america_final <- centro_america %>%
+  filter(
+    str_detect(indicator_name, "SDG Indicator 3.5.2") | 
+      str_detect(indicator_name, "heavy episodic drinking \\(15\\+\\) past 30 days \\(age-standardized\\)") |
+      str_detect(indicator_name, "abstainers past 12 months")
+  )
+```
+Consumo Total de Alcohol per cápita (APC)
+
+El análisis utiliza el Indicador ODS 3.5.2 de la Organización Mundial de la Salud (OMS), definido como la cantidad total de alcohol puro consumido por personas de 15 años o más en un año calendario.
+
+La robustez de este indicador se basa en la integración de tres componentes clave:
+
+
+Consumo Registrado: Estadísticas oficiales de producción, comercio y ventas sujetas a impuestos.
+
+
+Consumo No Registrado: Estimaciones de bebidas artesanales (ej. chicha, aguardientes locales) y contrabando.
+
+
+Ajuste por Turismo: Balance neto entre el consumo de visitantes extranjeros y residentes en el exterior.
+
+Importancia en Salud Pública: La OMS prioriza este indicador debido a su correlación directa con patologías graves (cirrosis, enfermedades cardiovasculares) y eventos externos como traumatismos por accidentes y violencia. Para este informe, los datos se procesaron en R para comparar las disparidades de género en Centroamérica.
+
+```{r}
+ca_total_apc <- centro_america_final%>%
+  filter(str_detect(indicator_name, "total per capita") & 
+           str_detect(indicator_name, "3.5.2")) %>%
+  filter(subgroup %in% c("Male", "Female", "Both sexes"))
+
+# Creación de una tabla resumen por país y sexo (promedio histórico)
+resumen_ca <- ca_total_apc %>%
+  group_by(setting, subgroup) %>%
+  summarise(promedio_litros = mean(estimate, na.rm = TRUE)) %>%
+  pivot_wider(names_from = subgroup, values_from = promedio_litros) %>%
+  clean_names()
+
+print(resumen_ca)
+```
+El análisis del Consumo Total de Alcohol per cápita (APC) revela una profunda disparidad de género en Centroamérica, donde los hombres presentan niveles de ingesta significativamente superiores a las mujeres. Los datos procesados muestran que Panamá y Belice lideran la región con consumos masculinos que alcanzan los 9.64 y 9.35 litros de alcohol puro anuales, respectivamente. En contraste, países como Guatemala reportan las cifras más bajas, destacando una brecha extrema donde el consumo masculino (3.71 litros) quintuplica al femenino (0.76 litros). Esta diferencia estructural entre sexos se mantiene constante en toda la muestra, oscilando generalmente entre tres y cinco veces más en el sector masculino. Para visualizar con mayor claridad estas variaciones geográficas y la magnitud de la brecha por sexo, se presenta a continuación un gráfico de barras comparativo que permite contrastar el desempeño de cada país.
+```{r}
+ggplot(ca_total_apc %>% filter(subgroup != "Both sexes"), 
+       aes(x = reorder(setting, estimate), y = estimate, fill = subgroup)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Consumo Total de Alcohol en Centroamérica (SDG 3.5.2)",
+       subtitle = "Litros de alcohol puro por habitante (15+ años)",
+       caption = "Fuente: OMS - Indicador 465",
+       x = "País", y = "Litros anuales", fill = "Sexo") +
+  theme_minimal() +
+  coord_flip()
+```
+Análisis de Resultados
+
+Consumo de Alcohol en Centroamérica (Indicador SDG 3.5.2)
+Los datos procesados revelan una marcada brecha de género y variaciones geográficas significativas en el consumo de alcohol puro por habitante en la región:
+
+•	Líderes de Consumo: Panamá y Belice presentan los niveles más altos de la región. En Panamá, el consumo masculino alcanza los 9.64 litros de alcohol puro anuales, seguido muy de cerca por Belice con 9.35 litros.
+
+•	Brecha de Género: Existe una disparidad profunda entre sexos en todos los países. En promedio, los hombres centroamericanos consumen entre 3 y 5 veces más alcohol que las mujeres. Por ejemplo, en Guatemala, mientras el consumo femenino es el más bajo de la región (0.76 litros), el masculino asciende a 3.71 litros.
+
+•	Países con Menor Consumo: Guatemala y El Salvador reportan los niveles de consumo per cápita más bajos de la muestra, tanto en hombres como en mujeres, manteniéndose por debajo de los 5 litros anuales en el sector masculino.
+
+Análisis de la Prevalencia de Consumo Episódico Fuerte (HED)
+```{r}
+ca_hed <- centro_america_final %>%
+  filter(str_detect(indicator_name, "heavy episodic drinking \\(15\\+\\) past 30 days \\(age-standardized\\)")) %>%
+  mutate(estimate = as.numeric(estimate)) %>%
+  # Nos quedamos con el año más reciente para la comparación actual
+  group_by(setting, subgroup) %>%
+  filter(date == max(date)) %>% 
+  ungroup()
+# Gráfico de puntos para comparar la brecha de riesgo
+ggplot(ca_hed, aes(x = estimate, y = reorder(setting, estimate))) +
+  geom_line(aes(group = setting), color = "grey80", linewidth = 2) + # Línea que une los puntos
+  geom_point(aes(color = subgroup), size = 4) +
+  scale_color_manual(values = c("Female" = "#f8766d", "Male" = "#00bfc4")) +
+  labs(
+    title = "Prevalencia de Consumo Episódico Fuerte (HED)",
+    subtitle = "Porcentaje de la población (15+) con consumo de 6+ bebidas en una ocasión",
+    x = "Porcentaje (%) de la población",
+    y = "País",
+    color = "Sexo",
+    caption = "Fuente: OMS Indicador 459 - Definición: 60g de alcohol puro en 30 días."
+  ) +
+  theme_minimal()
+```
+El gráfico muestra el porcentaje de la población (15+ años) que ha consumido 60 gramos o más de alcohol puro (aproximadamente 6 bebidas estándar) en una sola ocasión en los últimos 30 días. Este patrón, conocido como "atracón", es un predictor crítico de riesgos agudos a la salud.
+
+Hallazgos Clave en Centroamérica:
+•	Belice lidera el riesgo regional: Es el país con la mayor prevalencia de consumo episódico fuerte. Aproximadamente el 35% de los hombres en Belice incurren en este comportamiento de alto riesgo.
+
+•	La Brecha de Género: En todos los países de Centroamérica, la prevalencia de HED es drásticamente mayor en hombres que en mujeres. Por ejemplo, en Panamá y Belice, el porcentaje de hombres que practican el "atracón" triplica o incluso cuadriplica al de las mujeres.
+
+•	Guatemala, el nivel más bajo pero con brecha persistente: Aunque Guatemala presenta los porcentajes más bajos de la región para ambos sexos, la disparidad se mantiene: los hombres triplican la prevalencia femenina en este patrón de consumo.
+
+•	Nicaragua y Costa Rica: Presentan niveles intermedios de riesgo, con una prevalencia masculina que oscila entre el 22% y el 24%, lo que implica que casi 1 de cada 4 hombres adultos ha tenido un episodio de consumo excesivo en el último mes.
+
+Análisis de la Abstinencia y Estructura del Consumo en Centroamérica
+El indicador de abstinencia en los últimos 12 meses revela que una parte mayoritaria de la población centroamericana no consume alcohol. Sin embargo, al contrastar esto con tus gráficos anteriores de consumo per cápita y "atracón" (HED), se hace evidente que el consumo en la región está altamente concentrado y es de alta intensidad.
+```{r}
+ca_abst_data <- centro_america_final %>%
+  filter(str_detect(indicator_name, "abstainers past 12 months")) %>%
+  mutate(estimate = as.numeric(estimate)) %>%
+  group_by(setting, subgroup) %>%
+  filter(date == max(date)) %>% 
+  ungroup()
+
+# Creamos la tabla de contraste
+tabla_final_abst <- ca_abst_data %>%
+  select(setting, subgroup, estimate) %>%
+  pivot_wider(names_from = subgroup, values_from = estimate)
+print(tabla_final_abst)
+```
+
+
+```{r}
+ggplot(ca_abst_data, aes(x = estimate, y = reorder(setting, estimate), fill = subgroup)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("Female" = "#E69F00", "Male" = "#56B4E9")) +
+  labs(
+    title = "Prevalencia de Abstinencia en los últimos 12 meses",
+    subtitle = "Porcentaje de la población (15+) que NO consumió alcohol [Indicador 456]",
+    x = "Porcentaje de Abstenidos (%)",
+    y = "País",
+    fill = "Sexo",
+    caption = "Fuente: OMS. Los datos provienen de encuestas poblacionales representativas."
+  ) +
+  theme_minimal()
+```
+
+Hallazgos Clave de la Abstinencia:
+
+•	Brecha de Género en el Estilo de Vida: En todos los países analizados, las mujeres presentan tasas de abstinencia significativamente más altas que los hombres.
+
+•	Guatemala y el "Triángulo Norte": Guatemala lidera la región con un 74.3% de mujeres y un 56.5% de hombres que no han probado alcohol en el último año. Esto explica por qué, a pesar de tener un consumo per cápita total bajo, los riesgos individuales para los bebedores activos siguen siendo una preocupación de salud pública.
+
+•	Panamá y Belice como Excepciones: Son los países con menor abstinencia de la región. En Belice, solo el 39.8% de los hombres son abstemios, lo que coincide directamente con que sea el país donde se registran los mayores niveles de consumo explosivo (HED).
+
+
+Análisis de Resultados
+Magnitud y Brecha de Género (APC)
+El consumo total per cápita revela disparidades geográficas y de género profundas:
+•	Líderes Regionales: Panamá y Belice presentan los niveles de consumo más altos. En Panamá, los hombres consumen en promedio 9.64 litros de alcohol puro al año, seguidos por Belice con 9.35 litros.
+
+•	Desigualdad por Sexo: En toda la región, los hombres consumen entre 3 y 5 veces más alcohol que las mujeres. Por ejemplo, en Guatemala, la brecha es extrema: 3.71 litros en hombres frente a solo 0.76 litros en mujeres.
+
+Patrones de Riesgo Agudo (HED)
+
+El consumo de tipo "atracón" confirma que el riesgo se concentra en la población masculina:
+•	Belice al frente: Es el país con mayor prevalencia de riesgo; el 35% de sus hombres incurren en comportamientos de consumo episódico fuerte.
+
+•	Riesgo Intermedio: En Nicaragua y Costa Rica, casi 1 de cada 4 hombres ha tenido al menos un episodio de consumo excesivo en el último mes.
+
+Estructura Poblacional (Abstinencia)
+A pesar de los altos niveles de riesgo en bebedores, una parte mayoritaria de los centroamericanos es abstemia:
+
+•	Triángulo Norte: Guatemala lidera la abstinencia regional; el 74.3% de sus mujeres y el 56.5% de sus hombres no consumieron alcohol en el último año.
+
+•	Relación con el Riesgo: Países con menor abstinencia, como Belice (solo 39.8% de hombres abstemios), coinciden con los niveles más altos de consumo explosivo.
+
+Conclusión
+
+El análisis integral revela una paradoja del consumo en Centroamérica. Existe una alta prevalencia de abstinencia, especialmente en el norte de la región, lo que sugiere que el consumo de alcohol no es un comportamiento universal en estas sociedades. Sin embargo, la carga de salud pública es severa debido a que el consumo está altamente concentrado en la población masculina, que practica patrones de "atracón" de gran intensidad.
+
+Mientras que en países como Guatemala y El Salvador el enfoque debe ser preventivo para mantener las tasas de abstinencia, en Panamá y Belice la prioridad debe ser la mitigación de daños agudos derivados de la alta intensidad del consumo masculino. La marcada brecha de género en todos los indicadores subraya la necesidad de políticas de salud pública diferenciadas que aborden los factores culturales del consumo masculino en la región
